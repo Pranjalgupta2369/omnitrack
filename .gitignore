@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+.expo/
+.next/
+dist/
+supabase/.temp/
+supabase/functions/.env
+*.log

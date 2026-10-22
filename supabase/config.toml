@@ -1,0 +1,10 @@
+# Minimal config. If you run `supabase init` it generates a fuller one: keep its contents and add the
+# [functions.*] blocks below. These two functions authenticate the caller themselves (device key / cron secret),
+# so the platform-level JWT check must be off.
+project_id = "omnitrack"
+
+[functions.ingest-log]
+verify_jwt = false
+
+[functions.send-nudges]
+verify_jwt = false
