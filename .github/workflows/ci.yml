@@ -14,13 +14,13 @@ concurrency:
 jobs:
   supabase-db-tests:
     name: Database Schema & RLS Tests (PGlite)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: supabase/tests
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: "npm"
@@ -30,7 +30,7 @@ jobs:
 
   admin-web:
     name: Admin Web (Next.js 16 Typecheck & Build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: supabase-db-tests
     defaults:
       run:
@@ -39,8 +39,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder-project.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_key
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: "npm"
@@ -51,7 +51,7 @@ jobs:
 
   mobile-app:
     name: Mobile App (Expo SDK 57 Typecheck & Bundle)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: supabase-db-tests
     defaults:
       run:
@@ -60,8 +60,8 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder-project.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_key
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: "npm"
@@ -69,3 +69,4 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npx expo export --platform android
+
