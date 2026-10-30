@@ -10,6 +10,20 @@
 //         "occurred_at": "2026-10-12T08:31:02Z" }   // optional; omit if the hub has no reliable clock
 import { admin, json } from '../_shared/admin.ts';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-device-key',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+};
+
+function corsJson(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
+  });
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const METHODS = new Set(['rfid_tap', 'ultrasonic_presence']);
 const STATUS: Record<string, number> = {
@@ -25,33 +39,34 @@ async function sha256Hex(text: string): Promise<string> {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  if (req.method !== 'POST') return corsJson({ ok: false, error: 'method_not_allowed' }, 405);
 
   const key = req.headers.get('x-device-key');
-  if (!key) return json({ ok: false, error: 'unauthorized' }, 401);
+  if (!key) return corsJson({ ok: false, error: 'unauthorized' }, 401);
 
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return json({ ok: false, error: 'invalid_json' }, 400);
+    return corsJson({ ok: false, error: 'invalid_json' }, 400);
   }
 
   const { device_id, method, tag_uid, event_id, occurred_at } = body;
   if (typeof device_id !== 'string' || !UUID.test(device_id)) {
-    return json({ ok: false, error: 'invalid_device_id' }, 400);
+    return corsJson({ ok: false, error: 'invalid_device_id' }, 400);
   }
   if (typeof method !== 'string' || !METHODS.has(method)) {
-    return json({ ok: false, error: 'invalid_method' }, 400);
+    return corsJson({ ok: false, error: 'invalid_method' }, 400);
   }
   if (method === 'rfid_tap' && typeof tag_uid !== 'string') {
-    return json({ ok: false, error: 'tag_uid_required' }, 400);
+    return corsJson({ ok: false, error: 'tag_uid_required' }, 400);
   }
 
   let occurredAt: string | null = null;
   if (occurred_at !== undefined && occurred_at !== null) {
     const ms = Date.parse(String(occurred_at));
-    if (Number.isNaN(ms)) return json({ ok: false, error: 'invalid_occurred_at' }, 400);
+    if (Number.isNaN(ms)) return corsJson({ ok: false, error: 'invalid_occurred_at' }, 400);
     occurredAt = new Date(ms).toISOString();
   }
 
@@ -66,8 +81,8 @@ Deno.serve(async (req: Request) => {
 
   if (error) {
     console.error('ingest_device_event failed', error);
-    return json({ ok: false, error: 'server_error' }, 500);
+    return corsJson({ ok: false, error: 'server_error' }, 500);
   }
   const status = data?.ok === false ? (STATUS[data.error as string] ?? 400) : 200;
-  return json(data, status);
+  return corsJson(data, status);
 });

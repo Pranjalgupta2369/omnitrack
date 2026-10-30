@@ -69,4 +69,6 @@ export interface Achievement {
   icon: string;
   xp_reward: number;
   sort_order: number;
+  metric: 'total_completions' | 'hands_free_completions' | 'current_streak' | 'longest_streak' | 'total_xp';
+  threshold: number;
 }

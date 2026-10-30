@@ -92,6 +92,11 @@ test('sign-up creates a profile and a stats row', async () => {
   assert.equal(s.total_xp, 0); assert.equal(s.level, 1); assert.equal(s.current_streak, 0);
 });
 
+test('new profiles default to Asia/Kolkata', async () => {
+  const { id } = await one(`insert into auth.users (email) values ('timezone-default@example.com') returning id`);
+  assert.equal((await one(`select timezone from public.profiles where id=$1`, [id])).timezone, 'Asia/Kolkata');
+});
+
 test('profile timezone must be a real IANA zone', async () => {
   const u = await newUser();
   await assert.rejects(asUser(u, () => q(`update public.profiles set timezone='Mars/Phobos' where id=$1`, [u])),

@@ -8,12 +8,13 @@ import { StreakBadge } from '@/components/StreakBadge';
 import { XpBar } from '@/components/XpBar';
 import { XpToast } from '@/components/XpToast';
 import { useDashboard } from '@/lib/dashboard';
+import { buildBehavioralInsight } from '@/lib/behavioral-insights';
 import { supabase } from '@/lib/supabase';
 import { colors, mono } from '@/lib/theme';
 import type { Stats, TodayRow } from '@/lib/types';
 
 export default function Today() {
-  const { today, stats, loading, error, refresh } = useDashboard();
+  const { today, stats, week, loading, error, refresh } = useDashboard();
   const [toast, setToast] = useState<{ text: string; id: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -25,6 +26,7 @@ export default function Today() {
   const floor = stats?.level_start_xp ?? 0;
   const ceil = stats?.next_level_xp ?? 25;
   const xp = stats?.total_xp ?? 0;
+  const insight = buildBehavioralInsight(today, stats, week);
 
   async function logByHand(row: TodayRow) {
     const submit = async () => {
@@ -38,7 +40,8 @@ export default function Today() {
       }
       const after = await supabase.rpc('my_stats');
       const gained = ((after.data as Stats[] | null)?.[0]?.total_xp ?? before) - before;
-      if (gained > 0) setToast({ text: `+${gained} XP`, id: Date.now() });
+      if (row.category === 'medication') setToast({ text: 'Logged · Medication safety tracked', id: Date.now() });
+      else if (gained > 0) setToast({ text: `+${gained} XP`, id: Date.now() });
       await refresh();
     };
 
@@ -67,6 +70,27 @@ export default function Today() {
           <Text style={styles.date}>
             {new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
           </Text>
+          <Text style={styles.date}>{today.filter((row) => row.status === 'due').length} due · {done.length} of {today.length} completed</Text>
+        </View>
+
+        <View style={card}>
+          <View style={styles.coachHeading}>
+            <Text style={styles.insightTitle}>OmniTrack Coach</Text>
+            <Text style={styles.stage}>{insight.automationSupport}</Text>
+          </View>
+          <Text style={styles.coachSubtitle}>{insight.nudgeTitle}</Text>
+          <Text style={styles.caption}>{insight.nudge}</Text>
+          <View style={styles.meterTrack}>
+            <View style={[styles.meterFill, { width: `${insight.frictionReductionPercent}%` }]} />
+          </View>
+          <Text style={styles.insightMeta}>{insight.evidence}</Text>
+          <Text style={styles.insightMeta}>Weekly consistency: {insight.weeklyConsistencyPercent}% · {insight.shieldMessage}</Text>
+          <View style={styles.modelBox}>
+            <Text style={styles.modelTitle}>Fogg B=MAP lens</Text>
+            <Text style={styles.modelText}>{insight.foggPrompt}</Text>
+            <Text style={styles.modelText}>{insight.foggAbility}</Text>
+            <Text style={styles.modelFootnote}>{insight.foggMotivation} Hub support is a logging proxy, not a measure of habit automaticity.</Text>
+          </View>
         </View>
 
         <View style={card}>
@@ -124,4 +148,15 @@ const styles = StyleSheet.create({
   caption: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   divider: { borderTopWidth: 1, borderTopColor: colors.lineSoft },
   error: { color: colors.miss, fontSize: 13, marginBottom: 8 },
+  insightTitle: { color: colors.signal, fontSize: 15, fontWeight: '600', marginBottom: 6 },
+  insightMeta: { color: colors.dim, fontSize: 11, lineHeight: 16, marginTop: 8 },
+  coachHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' },
+  coachSubtitle: { color: colors.text, fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  stage: { color: colors.signal, backgroundColor: colors.panel2, borderRadius: 999, overflow: 'hidden', paddingHorizontal: 9, paddingVertical: 4, fontSize: 10, fontWeight: '600' },
+  meterTrack: { height: 5, borderRadius: 99, backgroundColor: colors.line, overflow: 'hidden', marginTop: 12 },
+  meterFill: { height: '100%', backgroundColor: colors.signal, borderRadius: 99 },
+  modelBox: { marginTop: 12, padding: 11, gap: 4, backgroundColor: colors.panel2, borderRadius: 10 },
+  modelTitle: { color: colors.text, fontSize: 12, fontWeight: '600' },
+  modelText: { color: colors.muted, fontSize: 11, lineHeight: 16 },
+  modelFootnote: { color: colors.dim, fontSize: 10, lineHeight: 15, marginTop: 3 },
 });

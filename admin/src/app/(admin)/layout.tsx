@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
@@ -16,8 +17,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   // is_admin() is a SECURITY DEFINER SQL function that reads profiles.is_admin for the signed-in user.
   const { data: isAdmin } = await supabase.rpc('is_admin');
+  const pathname = (await headers()).get('x-omnitrack-pathname');
+  const personalRoute = pathname === '/companion' || pathname === '/simulator';
 
-  if (!isAdmin) {
+  if (!isAdmin && !personalRoute) {
     return (
       <main className="center">
         <h1>Not an admin</h1>
@@ -41,8 +44,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <div className="brand">
           Omni<b>Track</b>
         </div>
-        <Link href="/">Overview</Link>
-        <Link href="/achievements">Achievements</Link>
+        {isAdmin ? <><Link href="/">Overview</Link><Link href="/achievements">Achievements</Link></> : null}
+        <Link href="/companion">My habits &amp; companion</Link>
+        <Link href="/simulator">Hub simulator</Link>
         <form action={signOut}>
           <button type="submit">Sign out</button>
         </form>

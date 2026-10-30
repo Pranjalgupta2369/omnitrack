@@ -4,12 +4,9 @@
 // outside quiet hours, scheduled weekday. This function writes the nudge row (unique per habit per day, so
 // overlapping runs can't double-send), then pushes it through Expo's push service.
 //
-// Optional: set ANTHROPIC_API_KEY to have a model reword the sentence. It is skipped for medication habits and
-// always falls back to the template on any error or timeout.
 import { admin, json } from '../_shared/admin.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 type Due = {
@@ -25,41 +22,16 @@ const hhmm = (t: string) => t.slice(0, 5);
 
 function template(d: Due): string {
   if (d.category === 'medication') {
-    return `Not logged yet. If you've already taken it, tap to log it. Only log it once you actually have.`;
+    return `Reminder: ${d.habit_name} window closed at ${hhmm(d.window_end)}. Please log if taken.`;
   }
-  return `Your window closed at ${hhmm(d.window_end)} and nothing's been logged yet. Still want to fit it in today?`;
-}
-
-async function reword(d: Due, fallback: string): Promise<string> {
-  if (!ANTHROPIC_API_KEY || d.category === 'medication') return fallback;
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-5-5',
-        max_tokens: 80,
-        system:
-          'You write ONE push-notification sentence for a habit tracker. Max 18 words, friendly and specific, ' +
-          'no emoji, no guilt, no health or medical claims. Output only the sentence.',
-        messages: [{
-          role: 'user',
-          content: `Habit: ${d.habit_name} (${d.category}). Its window closed at ${hhmm(d.window_end)} and nothing was logged today.`,
-        }],
-      }),
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!res.ok) return fallback;
-    const out = await res.json();
-    const text: string | undefined = out?.content?.[0]?.text?.trim();
-    return text && text.length <= 160 ? text : fallback;
-  } catch {
-    return fallback;
-  }
+  const categoryCopy: Record<string, string> = {
+    hydration: 'A small sip still counts. Your water window closed at',
+    focus: 'A short focused session is a good next step. Your study window closed at',
+    exercise: 'A few minutes of movement can be a useful start. Your activity window closed at',
+    recovery: 'Make room for a calm reset when it works for you. Your recovery window closed at',
+    custom: 'There is still room for this habit today. Its window closed at',
+  };
+  return `${categoryCopy[d.category] ?? categoryCopy.custom} ${hhmm(d.window_end)}; nothing has been logged yet.`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -77,7 +49,7 @@ Deno.serve(async (req: Request) => {
   let created = 0;
   let pushed = 0;
   for (const d of due) {
-    const message = await reword(d, template(d));
+    const message = template(d);
 
     // unique (habit_id, local_date): if another run already created it, nothing comes back and we skip
     const { data: inserted, error: insertError } = await admin

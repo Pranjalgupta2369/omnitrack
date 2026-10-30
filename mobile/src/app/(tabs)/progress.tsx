@@ -22,7 +22,7 @@ export default function Progress() {
   useEffect(() => {
     (async () => {
       const [a, e] = await Promise.all([
-        supabase.from('achievements').select('id,title,description,icon,xp_reward,sort_order').order('sort_order'),
+        supabase.from('achievements').select('id,title,description,icon,xp_reward,sort_order,metric,threshold').order('sort_order'),
         supabase.from('user_achievements').select('achievement_id'),
       ]);
       if (a.data) setAchievements(a.data as Achievement[]);
@@ -35,6 +35,9 @@ export default function Progress() {
   const weekHub = week.reduce((n, w) => n + w.hands_free, 0);
   const floor = stats?.level_start_xp ?? 0;
   const ceil = stats?.next_level_xp ?? 25;
+  const streak = stats?.current_streak ?? 0;
+  const shields = stats?.shields ?? 0;
+  const shieldDays = 7 - (streak % 7);
 
   return (
     <Screen>
@@ -46,6 +49,12 @@ export default function Progress() {
         <Text style={styles.hint}>
           {totalXp} XP · longest streak {stats?.longest_streak ?? 0} days · {stats?.total_completions ?? 0} completions
         </Text>
+      </View>
+
+      <View style={card}>
+        <Text style={styles.cardTitle}>Streak shield</Text>
+        <Text style={styles.hint}>{shields >= 2 ? 'Shield capacity full · 2 of 2' : `${shieldDays} ${shieldDays === 1 ? 'day' : 'days'} until the next shield · ${shields} of 2 held`}</Text>
+        <XpBar value={shields >= 2 ? 1 : (streak % 7) / 7} />
       </View>
 
       <View style={card}>
@@ -79,12 +88,14 @@ export default function Progress() {
         <Text style={styles.cardTitle}>Achievements</Text>
         {achievements.map((a, i) => {
           const got = earned.has(a.id);
+          const metricValue = stats?.[a.metric] ?? 0;
           return (
             <View key={a.id} style={[styles.ach, i > 0 && styles.divider]}>
               <Ionicons name={(got ? a.icon : 'lock-closed') as IconName} size={24} color={got ? colors.signal : colors.dim} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.achTitle, !got && { color: colors.muted }]}>{a.title}</Text>
                 <Text style={styles.hint}>{a.description}</Text>
+                {!got ? <Text style={styles.hint}>{metricValue} / {a.threshold}</Text> : null}
               </View>
               {a.xp_reward > 0 && <Text style={[styles.reward, got && { color: colors.signal }]}>+{a.xp_reward}</Text>}
             </View>

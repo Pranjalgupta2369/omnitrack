@@ -1,5 +1,11 @@
 // Shared helpers for Edge Functions. The secret key bypasses RLS: it must only ever live in function secrets.
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+declare const Deno: {
+  env: {
+    get(name: string): string | undefined;
+  };
+};
 
 function secretKey(): string {
   // New-style keys: SUPABASE_SECRET_KEYS is a JSON object keyed by name; legacy: SUPABASE_SERVICE_ROLE_KEY.

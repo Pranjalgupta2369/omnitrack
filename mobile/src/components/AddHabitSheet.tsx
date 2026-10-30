@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,13 +6,14 @@ import { Chip } from '@/components/Chip';
 import { supabase } from '@/lib/supabase';
 import { colors, mono } from '@/lib/theme';
 import { CATEGORIES, METHODS, type Category, type Method } from '@/lib/types';
+import type { ParsedHabit } from '@/lib/nlp-habit-parser';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // ISO weekdays 1..7
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-type Props = { visible: boolean; onClose: () => void; onSaved: () => void };
+type Props = { visible: boolean; onClose: () => void; onSaved: () => void; initial?: ParsedHabit | null };
 
-export function AddHabitSheet({ visible, onClose, onSaved }: Props) {
+export function AddHabitSheet({ visible, onClose, onSaved, initial }: Props) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<Category>('custom');
   const [method, setMethod] = useState<Method>('rfid');
@@ -21,6 +22,17 @@ export function AddHabitSheet({ visible, onClose, onSaved }: Props) {
   const [tag, setTag] = useState('');
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 7]);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !initial) return;
+    setName(initial.name);
+    setCategory(initial.category);
+    setMethod(initial.logging_method);
+    setTag(initial.tag_uid ?? '');
+    setStart(initial.window_start?.slice(0, 5) ?? '09:00');
+    setEnd(initial.window_end?.slice(0, 5) ?? '10:00');
+    setDays(initial.days);
+  }, [visible, initial]);
 
   const toggleDay = (d: number) =>
     setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
@@ -45,7 +57,8 @@ export function AddHabitSheet({ visible, onClose, onSaved }: Props) {
     if (error) {
       return Alert.alert('Could not save', error.code === '23505' ? 'That tag is already used by another active habit.' : error.message);
     }
-    setName(''); setTag('');
+    setName(''); setTag(''); setCategory('custom'); setMethod('rfid');
+    setStart('09:00'); setEnd('10:00'); setDays([1, 2, 3, 4, 5, 6, 7]);
     onSaved();
   }
 

@@ -1,4 +1,5 @@
 import { signIn } from './actions';
+import Link from 'next/link';
 
 // Every page here reads the signed-in user's cookies, so none of it can be prerendered. Next 16 (Cache
 // Components) asks you to say so explicitly; `instant = false` lets these routes render on request.
@@ -9,13 +10,13 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="center">
       <h1 className="brand">
-        Omni<b>Track</b> admin
+        Omni<b>Track</b>
       </h1>
-      <p className="sub">Sign in with an account that has is_admin = true.</p>
-      <form action={signIn} className="stack">
+      <p className="sub">Sign in to your account. Administrator tools require separate approval.</p>
+      <form action={signIn} className="stack auth-card">
         <label>
           Email
-          <input name="email" type="email" autoComplete="email" required />
+          <input name="email" type="email" autoComplete="email" autoCapitalize="none" required />
         </label>
         <label>
           Password
@@ -25,6 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <button className="primary" type="submit">
           Sign in
         </button>
+        <p className="auth-links">New to OmniTrack? <Link href="/register">Create an account</Link></p>
       </form>
     </main>
   );

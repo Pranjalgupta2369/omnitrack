@@ -22,26 +22,55 @@ export default function You() {
   const { session } = useSession();
   const [name, setName] = useState('');
   const [tz, setTz] = useState('');
+  const [quietStart, setQuietStart] = useState('22:30');
+  const [quietEnd, setQuietEnd] = useState('07:00');
+  const [grace, setGrace] = useState('20');
   const [devices, setDevices] = useState<Device[]>([]);
   const [hubLabel, setHubLabel] = useState('');
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [pushNote, setPushNote] = useState('');
+  const [simKey, setSimKey] = useState('');
+  const [simTag, setSimTag] = useState('');
+  const [simResult, setSimResult] = useState('');
+  const [simBusy, setSimBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [p, d] = await Promise.all([
-      supabase.from('profiles').select('display_name,timezone').single(),
+      supabase.from('profiles').select('display_name,timezone,quiet_start,quiet_end,nudge_grace_min').single(),
       // list columns explicitly: the key hash column is not readable by the app
       supabase.from('devices').select('id,label,location,last_seen_at').order('created_at'),
     ]);
-    if (p.data) { setName(p.data.display_name ?? ''); setTz(p.data.timezone); }
+    if (p.data) { setName(p.data.display_name ?? ''); setTz(p.data.timezone); setQuietStart(p.data.quiet_start.slice(0, 5)); setQuietEnd(p.data.quiet_end.slice(0, 5)); setGrace(String(p.data.nudge_grace_min)); }
     if (d.data) setDevices(d.data as Device[]);
   }, []);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   async function saveTimezone() {
-    const { error } = await supabase.from('profiles').update({ timezone: tz.trim() }).eq('id', session?.user.id ?? '');
-    Alert.alert(error ? 'Not saved' : 'Saved', error ? error.message : 'Streaks and windows now use this time zone.');
+    const graceMinutes = Number(grace);
+    if (!Number.isInteger(graceMinutes) || graceMinutes < 0 || graceMinutes > 240) return Alert.alert('Check grace period', 'Use a whole number from 0 to 240 minutes.');
+    const { error } = await supabase.from('profiles').update({ timezone: tz.trim(), quiet_start: quietStart, quiet_end: quietEnd, nudge_grace_min: graceMinutes }).eq('id', session?.user.id ?? '');
+    Alert.alert(error ? 'Not saved' : 'Saved', error ? error.message : 'Time zone and reminder preferences updated.');
+  }
+
+  async function simulate(method: 'rfid_tap' | 'ultrasonic_presence', deviceId: string) {
+    if (!simKey.trim()) return Alert.alert('Enter the hub key');
+    if (method === 'rfid_tap' && !simTag.trim()) return Alert.alert('Enter the RFID tag UID');
+    setSimBusy(true); setSimResult('');
+    try {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/ingest-log`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-device-key': simKey.trim() },
+        body: JSON.stringify({ device_id: deviceId, method, ...(method === 'rfid_tap' ? { tag_uid: simTag.trim() } : {}), event_id: `mobile-demo-${Date.now()}` }),
+      });
+      const result = await response.json();
+      setSimResult(JSON.stringify(result, null, 2));
+      if (!response.ok) Alert.alert('Simulator response', `HTTP ${response.status}`);
+    } catch (cause) {
+      Alert.alert('Simulator failed', cause instanceof Error ? cause.message : 'Could not reach the ingest function.');
+    } finally {
+      setSimBusy(false);
+    }
   }
 
   async function addHub() {
@@ -76,6 +105,11 @@ export default function You() {
       <View style={card}>
         <Text style={styles.title}>{name || session?.user.email}</Text>
         <Text style={styles.label}>Time zone (IANA name)</Text>
+        <View style={styles.presets}>
+          {['Asia/Kolkata', 'UTC', 'Europe/London', 'America/New_York'].map((zone) => (
+            <Pressable accessibilityRole="button" key={zone} style={styles.preset} onPress={() => setTz(zone)}><Text style={styles.presetText}>{zone}</Text></Pressable>
+          ))}
+        </View>
         <View style={styles.row}>
           <TextInput style={[styles.input, { flex: 1, fontFamily: mono }]} value={tz} onChangeText={setTz}
             autoCapitalize="none" placeholder="Asia/Kolkata" placeholderTextColor={colors.dim} />
@@ -83,6 +117,25 @@ export default function You() {
             <Text style={styles.btnText}>Save</Text>
           </Pressable>
         </View>
+        <Text style={styles.label}>Quiet hours (24h) · nudge grace (minutes)</Text>
+        <View style={styles.row}>
+          <TextInput accessibilityLabel="Quiet hours start" style={[styles.input, { flex: 1, fontFamily: mono }]} value={quietStart} onChangeText={setQuietStart} placeholder="22:30" />
+          <TextInput accessibilityLabel="Quiet hours end" style={[styles.input, { flex: 1, fontFamily: mono }]} value={quietEnd} onChangeText={setQuietEnd} placeholder="07:00" />
+          <TextInput accessibilityLabel="Reminder grace minutes" style={[styles.input, { width: 76, fontFamily: mono }]} value={grace} onChangeText={setGrace} keyboardType="number-pad" />
+        </View>
+      </View>
+
+      <View style={card}>
+        <Text style={styles.title}>Demo simulator</Text>
+        <Text style={styles.muted}>The key is sent only to the ingest function and is not stored in the app.</Text>
+        <TextInput accessibilityLabel="Hub device key" style={[styles.input, { marginTop: 10, fontFamily: mono }]} value={simKey} onChangeText={setSimKey} placeholder="Paste device key for this demo" placeholderTextColor={colors.dim} secureTextEntry autoCapitalize="none" />
+        <TextInput accessibilityLabel="RFID tag UID" style={[styles.input, { marginTop: 8, fontFamily: mono }]} value={simTag} onChangeText={setSimTag} placeholder="RFID tag UID" placeholderTextColor={colors.dim} autoCapitalize="characters" />
+        {devices.map((device) => <View key={device.id} style={[styles.row, { marginTop: 8 }]}>
+          <Text style={[styles.muted, { flex: 1 }]}>{device.label}</Text>
+          <Pressable accessibilityRole="button" disabled={simBusy} style={styles.btn} onPress={() => void simulate('rfid_tap', device.id)}><Text style={styles.btnText}>{simBusy ? 'Sending…' : 'Tap RFID'}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={simBusy} style={styles.btn} onPress={() => void simulate('ultrasonic_presence', device.id)}><Text style={styles.btnText}>Presence</Text></Pressable>
+        </View>)}
+        {simResult ? <Text selectable style={[styles.mono, { marginTop: 10 }]}>{simResult}</Text> : null}
       </View>
 
       <View style={card}>
@@ -164,5 +217,8 @@ const styles = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: 'rgba(4,7,14,0.8)', justifyContent: 'center', padding: 20 },
   sheet: { gap: 2 },
   warn: { color: colors.warn, fontSize: 12, lineHeight: 17, marginBottom: 6 },
+  presets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  preset: { backgroundColor: colors.panel2, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 5 },
+  presetText: { color: colors.signal, fontSize: 10 },
   mono: { color: colors.text, fontFamily: mono, fontSize: 12 },
 });
